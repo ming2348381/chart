@@ -52,7 +52,7 @@ public class MainActivity extends Activity {
         mDemoButtonView.setOnClickListener(new OnClickListener() {
             @Override
             public void onClick(View view) {
-                mInputEditText.setText("13,52,45,22,93,61,34,77,8,28,72,44");
+                mInputEditText.setText("0,52,45,22,93,61,34,77,8,28,72,44");
                 runAnimation();
             }
         });
@@ -86,7 +86,7 @@ public class MainActivity extends Activity {
                 mCircleView.setValueAnimation(getValue(2), null);
                 break;
             case 1:
-                mBrokenLineView.setValue(getValue(12), null);
+                mBrokenLineView.setValue(getValue(12));
                 break;
             case 2:
                 mPieView.setValue(getValue(8), getDemoText(8));

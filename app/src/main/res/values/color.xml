@@ -7,8 +7,10 @@
     <color name="green">#FF4EFEB3</color>
     <color name="blue">#FF46A3FF</color>
     <color name="transparent">#00000000</color>
-    <color name="gray">#FFd0d0d0</color>
+    <color name="broken_line_view_value_title">#FFd0d0d0</color>
     <color name="black">#FF000000</color>
     <color name="app_text_on">#FFFFFFFF</color>
     <color name="app_text_off">#FF999999</color>
+    <color name="broken_line_view_circle">#FF484891</color>
+    <color name="broken_line_view_line">#FF9999CC</color>
 </resources>

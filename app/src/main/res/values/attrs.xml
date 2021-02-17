@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="BrokenLineView">
+        <attr name="circleColor" format="color" />
+        <attr name="circleRadius" format="dimension" />
+        <attr name="titleColumnColor" format="color" />
+        <attr name="titleColumnStrokeWidth" format="dimension" />
+        <attr name="titleColumnTextSize" format="dimension" />
+        <attr name="lineColor" format="color" />
+        <attr name="lineStrokeWidth" format="dimension" />
+        <attr name="displayRowCount" format="integer" />
+        <attr name="animationTotalTime" format="integer" />
+        <attr name="animationInterval" format="integer" />
+    </declare-styleable>
+</resources>
