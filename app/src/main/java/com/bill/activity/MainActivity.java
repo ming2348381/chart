@@ -2,23 +2,23 @@ package com.bill.activity;
 
 import android.app.Activity;
 import android.os.Bundle;
-import androidx.viewpager.widget.ViewPager;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.Window;
 import android.widget.EditText;
 
+import androidx.viewpager.widget.ViewPager;
+
 import com.bill.R;
 import com.bill.adapter.AdapterViewPager;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-
 import com.bill.chart.BrokenLineView;
 import com.bill.chart.CircleView;
 import com.bill.chart.PieView;
 import com.bill.chart.PillarView;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public class MainActivity extends Activity {
     ViewPager mInfoViewPager;
@@ -30,6 +30,7 @@ public class MainActivity extends Activity {
     View mRunButton;
     View mDemoButtonView;
     View mDemo2ButtonView;
+    View mDataFloatingActionButton;
     EditText mInputEditText;
 
     @Override
@@ -46,9 +47,22 @@ public class MainActivity extends Activity {
         mInputEditText = (EditText) findViewById(R.id.input_edit_text);
         mDemoButtonView = findViewById(R.id.demo_button);
         mDemo2ButtonView = findViewById(R.id.demo2_button);
+        mDataFloatingActionButton = findViewById(R.id.data_floating_action_button);
     }
 
     private void initView() {
+        mDataFloatingActionButton.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                StringBuilder result = new StringBuilder();
+                for (int i = 0; i < 12; i++) {
+                    result.append((int) (Math.random() * 100 + 1)).append(",");
+                }
+                mInputEditText.setText(result.substring(0, result.length() - 1));
+                runAnimation();
+            }
+        });
+
         mDemoButtonView.setOnClickListener(new OnClickListener() {
             @Override
             public void onClick(View view) {
