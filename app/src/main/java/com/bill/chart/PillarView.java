@@ -64,7 +64,7 @@ public class PillarView extends View {
 		PaintPillar.setAntiAlias(true);
 
 		PaintText = new Paint();
-		PaintText.setColor(res.getColor(R.color.gray));
+		PaintText.setColor(res.getColor(R.color.broken_line_view_value_title));
 		PaintText.setStrokeWidth(3);
 		PaintText.setAntiAlias(true);
 		PaintText.setTextSize(40);

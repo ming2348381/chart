@@ -1,315 +1,472 @@
 package com.bill.chart;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import com.bill.R;
-import com.bill.value.Constant;
 import android.content.Context;
+import android.content.res.TypedArray;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.util.AttributeSet;
 import android.view.View;
 
+import com.bill.BuildConfig;
+import com.bill.R;
 
-public class BrokenLineView extends View {
-	private int ScrHeight;
-	private int ScrWidth;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
-	//筆
-	private Paint PaintCircle;
-	private Paint PaintText = null;
-	private Paint PaintLine;
+public class BrokenLineView extends View implements Runnable {
+    private static final float DEFAULT_MAX_ROW_VALUE = 100f;
+    private static final int CIRCLE_COLOR = R.color.broken_line_view_circle;
+    private static final int CIRCLE_RADIUS = 20;
+    private static final int TITLE_COLUMN_COLOR = R.color.broken_line_view_value_title;
+    private static final int TITLE_COLUMN_STROKE_WIDTH = 3;
+    private static final int TITLE_COLUMN_TEXT_SIZE = 40;
+    private static final int LINE_STROKE_WIDTH = 16;
+    private static final int LINE_COLOR = R.color.broken_line_view_line;
+    private static final int DISPLAY_ROW_COUNT = 6;
+    private static final int ANIMATION_TOTAL_TIME = 500;
+    private static final int ANIMATION_INTERVAL = 25;
 
-	private boolean firstDraw = true;
-	
-	/** 動畫總耗時 毫秒 */
-	private static final int AnimationTotalTime = 500;
-	/** 最大顯示數值個數 */
-	private static final int MaxValueCapacity = 12;	
+    private Paint mCirclePaint;
+    private Paint mTitlePaint;
+    private Paint mLinePaint;
 
-	float topY;
-	int initY;
-	
-	// 圖表值
-	private List<Float> arrNum = new ArrayList<Float>();
-	private List<String> arrText = new ArrayList<String>();	
-	private List<Float> arrOrgNum = new ArrayList<Float>();
-	private List<Float> arrNewTop = new ArrayList<Float>();
-	
-	/** 動畫執行緒 */
-	private setValueAnimation_Thread setValueAnimation_Thread = null;
-	
-	public BrokenLineView(Context context, AttributeSet attrs) {
-		super(context, attrs);
-		doAdditionalConstructorWork(context);
-	}
+    private int mCircleColor = getResources().getColor(CIRCLE_COLOR);
+    private float mCircleRadius = CIRCLE_RADIUS;
 
-	public BrokenLineView(Context context) {
-		super(context);
-		doAdditionalConstructorWork(context);
-	}
+    private int mTitleColumnColor = getResources().getColor(TITLE_COLUMN_COLOR);
+    private float mTitleColumnStrokeWidth = TITLE_COLUMN_STROKE_WIDTH;
+    private float mTitleColumnTextSize = TITLE_COLUMN_TEXT_SIZE;
 
-	private void doAdditionalConstructorWork(Context context) {
-		// 解決4.1版本 以下canvas.drawTextOnPath()不顯示問題
-		this.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+    private float mLineStrokeWidth = LINE_STROKE_WIDTH;
+    private int mLineColor = getResources().getColor(LINE_COLOR);
 
-		//設定預設值
-		setDefaultValue();
-		
-		PaintCircle = new Paint();
-		PaintCircle.setColor(Color.parseColor("#FF484891"));	//深靛色
-		PaintCircle.setStyle(Paint.Style.FILL);
-		PaintCircle.setAntiAlias(true);
+    private int mDisplayRowCount = DISPLAY_ROW_COUNT;
 
-		PaintText = new Paint();
-		PaintText.setColor(getResources().getColor(R.color.gray));
-		PaintText.setStrokeWidth(3);
-		PaintText.setAntiAlias(true);
-		PaintText.setTextSize(40);
-		PaintText.setTypeface(Typeface.DEFAULT_BOLD);
-		
-		PaintLine = new Paint();
-		PaintLine.setColor(Color.parseColor("#FF9999CC"));		//淡靛色
-		PaintLine.setStyle(Paint.Style.FILL);
-		PaintLine.setAntiAlias(true);
-	}
+    private int mAnimationTotalTime = ANIMATION_TOTAL_TIME;
+    private int mAnimationInterval = ANIMATION_INTERVAL;
 
-	public void onDraw(Canvas canvas) {
-		// view長寬
-		ScrHeight = getHeight();
-		ScrWidth = getWidth();
+    private List<GeneralDrawInfo> mRowLineGeneralDrawInfoList;
+    private List<GeneralDrawInfo> mRowTitleGeneralDrawInfoList;
+    private List<GeneralDrawInfo> mColumnTitleGeneralDrawInfoList;
+    private List<AnimationDrawInfo> mColumnLineAnimationDrawInfoList;
+    private List<AnimationDrawInfo> mColumnCircleAnimationDrawInfoList;
+    private final List<Float> mValueColumns = new ArrayList<>();
+    private final List<Float> mOriginalValueColumns = new ArrayList<>();
+    private List<String> mTitleColumns;
+    private int mCurrentAnimationIntervalIndex;
+    private int mWidth;
+    private int mHeight;
 
-		// 畫布背景
-		//canvas.drawColor(Color.WHITE);
-		
-		float maxArrNumValue = getMaxValue(arrNum);	//最大值
-		
-		int lineCount = 5; // 標識線數量
-		int lnSpace = (int)((ScrHeight * 0.85) / (lineCount)); // 標識間距
+    public BrokenLineView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init(context, attrs);
+    }
 
-		int initX = 120;
-		initY = (int)(ScrHeight * 0.9);
+    public BrokenLineView(Context context) {
+        super(context);
+        init(context, null);
+    }
 
-		int topX = initX;
-		//topY;
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        mWidth = getMeasuredWidth();
+        mHeight = getMeasuredHeight();
+        run();
+    }
 
-		// Y 軸 標識線和值
-		for (int i = 0; i <= lineCount; i++) {
-			float y = initY - i * lnSpace;
-			canvas.drawLine(topX, y, ScrWidth, y, PaintText);
-			int text = (int)(maxArrNumValue * i / lineCount);
-			canvas.drawText(Integer.toString(text), (float)(ScrWidth * 0.02), y, PaintText);
-		}
-	
-		// 折線
-		//float circleRadius = 20;	//小圓點半徑
-		float circleRadius = (int)((ScrHeight * ScrWidth) * 0.000012);	//小圓點半徑	1640 * 1080 = 約20		
-		PaintLine.setStrokeWidth(circleRadius * 0.8f);
-		topY = initY - (lineCount) * lnSpace; // 標識線頂點
-		float top;
-		int xSpace = ScrWidth / 15;
-		float previousTopX = 0;
-		float previousTopY = 0;
-		for (int i = 0; i < arrNum.size(); i++) {
-			topX = initX + (i + 1) * xSpace;			
-			
-			if(firstDraw){				
-				top = (float) (topY + (1 - (arrNum.get(i) / maxArrNumValue)) * (initY - topY));
-			}else{
-				top = arrNewTop.get(i);
-			}
-			
-			if(i > 0){			
-				canvas.drawLine(previousTopX, previousTopY, topX, top, PaintLine);
-				canvas.drawCircle(previousTopX, previousTopY, circleRadius, PaintCircle);
-			} 
-			
-			if(i == arrNum.size() - 1){
-		        canvas.drawCircle(topX, top, circleRadius, PaintCircle);
-			}
-			
-			previousTopX = topX;
-			previousTopY = top;
-			
-			// 標識文字
-			canvas.drawText(arrText.get(i), topX, (float)(ScrHeight * 0.95), PaintText);
-		}
-	}
-	
-//	/** 改變值 */
-//	public void setValue(List<Integer> arrValue, List<String> arrText){
-//		arrNum = arrValue;
-//		if(arrText != null){
-//			this.arrText = arrText;
-//		}		
-//		invalidate();
-//	}
-	
-	
-	/** 改變值 */
-	public void setValue(List<Float> arrValue, List<String> arrText){
-		if(setValueAnimation_Thread != null){
-			setValueAnimation_Thread.stopRun();
-		}
-		
-		synchronized(PillarView.class){
-		firstDraw = false;
-		
-		arrOrgNum.clear();
-		arrOrgNum.addAll(arrNum);
-	
-		arrNum.clear();
-		arrNum.addAll(arrValue);
-		
-		if(arrText != null){
-			//arrOrgText = arrText;
-		}
-		
-		setValueAnimation_Thread = new setValueAnimation_Thread();
-		setValueAnimation_Thread.start();
-		}
-	}
-	
-	/** 改變值，動畫方式 實作*/
-	private class setValueAnimation_Thread extends Thread{
-		private static final int flag_stop = -1;
-		private static final int flag_run = 2;
-		private static final int flag_add = 0;
-		private static final int flag_reduce = 1;
-		
-		/** 畫面改變總次數 */
-		private int AnimationInterval = (int)(AnimationTotalTime / Constant.AnimationInterval);
-		private List<Integer> arrOperationNum = new ArrayList<Integer>();
-		private List<Float> arrDistanceNum = new ArrayList<Float>();
+    @Override
+    public void onDraw(Canvas canvas) {
+        for (GeneralDrawInfo generalDrawInfo : mRowLineGeneralDrawInfoList) {
+            canvas.drawLine(generalDrawInfo.getStartX(), generalDrawInfo.getStartY(), generalDrawInfo.getStopX(), generalDrawInfo.getStopY(), mTitlePaint);
+        }
 
-		int flag_state = flag_run;
-		
-		public void stopRun(){
-			flag_state = flag_stop;
-			setValueAnimation_Thread = null;
-		}
-		
-		public void run() {
-			synchronized(PillarView.class){
-			complementArr();
-			
-			for(int i = 0; i < arrNum.size(); i++){	
-				//相對原始位置 增加或減少
-				float orgTop = topY + (1 - (arrOrgNum.get(i) / getMaxValue(arrOrgNum))) * (initY - topY);
-				float top = topY + (1 - (arrNum.get(i) / getMaxValue(arrNum))) * (initY - topY);
-				
-				if(orgTop > top){
-					arrOperationNum.add(flag_reduce);
-				}else{
-					arrOperationNum.add(flag_add);
-				}
-				
-				//與原始位置相差距離
-				float distanceNum = Math.abs(orgTop - top);
-				distanceNum = distanceNum / AnimationInterval;				
-				arrDistanceNum.add(distanceNum);
-			}		
-			
-			for(int i = 0; i < AnimationInterval; i++){
-				for(int arrNumIndex = 0; arrNumIndex < arrNum.size(); arrNumIndex++){
-					float distanceNum = arrDistanceNum.get(arrNumIndex) * (i + 1);					
-					float orgTop = topY + (1 - (arrOrgNum.get(arrNumIndex) / getMaxValue(arrOrgNum))) * (initY - topY);
-					
-					if(arrOperationNum.get(arrNumIndex) == flag_add){						
-						arrNewTop.set(arrNumIndex, orgTop + distanceNum);
-					}else{
-						arrNewTop.set(arrNumIndex, orgTop - distanceNum);
-					}
-				}
-	
-				if(flag_state == flag_stop){
-					return;
-				}
-				
-				post(new Runnable() {
-					@Override
-					public void run() {		
-						invalidate();
-					}
-				});
-				
-				try {
-					Thread.sleep(Constant.AnimationInterval);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
-			}	
-			}
-		}
-		
-		/** 數值補位至圖表上限 */
-		private void complementArr(){
-			for(int i = 1; i <= MaxValueCapacity; i++){
-				if(arrNum.size() < i){					
-					arrNum.add(0f);
-				}
-				
-				if(arrOrgNum.size() < i){
-					arrOrgNum.add(0f);
-				}
-			}
-		}
-	}
-	
-	/** 取得最大值 */
-	private Float getMaxValue(List<Float> list){
-		if(list.size() == 0){
-			return 0f;
-		}
-		
-		Float max = list.get(0);
-		for(int i = 1; i < list.size(); i++){
-			if(list.get(i) > max){
-				max = list.get(i);
-			}
-		}
-		
-		if(max == 0){
-			max = 100f;
-		}
-		
-		return max;
-	}
-	
-	private void setDefaultValue(){
-		// 預設值
-		arrNum.add(1f);
-		arrNum.add(34f);
-		arrNum.add(3f);
-		arrNum.add(22f);
-		arrNum.add(82f);
-		arrNum.add(12f);
-		arrNum.add(22f);
-		arrNum.add(100f);
-		arrNum.add(2f);
-		arrNum.add(72f);
-		arrNum.add(12f);
-		arrNum.add(45f);
-		
-		//預設值
-		arrText.add("1");
-		arrText.add("2");
-		arrText.add("3");
-		arrText.add("4");
-		arrText.add("5");
-		arrText.add("6");
-		arrText.add("7");
-		arrText.add("8");
-		arrText.add("9");
-		arrText.add("10");
-		arrText.add("11");
-		arrText.add("12");
-		
-		arrNewTop.clear();
-		arrNewTop.addAll(arrNum);
-	}
+        for (GeneralDrawInfo generalDrawInfo : mRowTitleGeneralDrawInfoList) {
+            canvas.drawText(generalDrawInfo.getText(), generalDrawInfo.getX(), generalDrawInfo.getY(), mTitlePaint);
+        }
 
+        for (GeneralDrawInfo generalDrawInfo : mColumnTitleGeneralDrawInfoList) {
+            canvas.drawText(generalDrawInfo.getText(), generalDrawInfo.getX(), generalDrawInfo.getY(), mTitlePaint);
+        }
+
+        for (AnimationDrawInfo animationDrawInfo : mColumnLineAnimationDrawInfoList) {
+            canvas.drawLine(animationDrawInfo.getStartX(), animationDrawInfo.getStartY(), animationDrawInfo.getStopX(), animationDrawInfo.getStopY(), mLinePaint);
+        }
+
+        for (AnimationDrawInfo animationDrawInfo : mColumnCircleAnimationDrawInfoList) {
+            canvas.drawCircle(animationDrawInfo.getStopX(), animationDrawInfo.getStopY(), mCircleRadius, mCirclePaint);
+        }
+    }
+
+    @Override
+    public void run() {
+        if (mCurrentAnimationIntervalIndex >= getAnimationTotalInterval()) {
+            return;
+        }
+
+        if (mCurrentAnimationIntervalIndex == 0) {
+            initData();
+            setGeneralDrawInfo(mWidth, mHeight);
+        }
+
+        setColumnDrawInfo(mWidth, mHeight);
+        mCurrentAnimationIntervalIndex++;
+        invalidate();
+        postDelayed(this, mAnimationInterval);
+    }
+
+    private void init(Context context, AttributeSet attrs) {
+        // 解決4.1版本 以下canvas.drawTextOnPath()不顯示問題
+        setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+
+        initAttribute(context, attrs);
+
+        mCirclePaint = new Paint();
+        mCirclePaint.setColor(mCircleColor);
+        mCirclePaint.setStyle(Paint.Style.FILL);
+        mCirclePaint.setAntiAlias(true);
+
+        mTitlePaint = new Paint();
+        mTitlePaint.setColor(mTitleColumnColor);
+        mTitlePaint.setStrokeWidth(mTitleColumnStrokeWidth);
+        mTitlePaint.setTextSize(mTitleColumnTextSize);
+        mTitlePaint.setTypeface(Typeface.DEFAULT_BOLD);
+        mTitlePaint.setAntiAlias(true);
+
+        mLinePaint = new Paint();
+        mLinePaint.setColor(mLineColor);
+        mLinePaint.setStyle(Paint.Style.FILL);
+        mLinePaint.setStrokeWidth(mLineStrokeWidth);
+        mLinePaint.setAntiAlias(true);
+
+        initData();
+        if (BuildConfig.DEBUG) {
+            setDemoValue();
+        }
+    }
+
+    private void initAttribute(Context context, AttributeSet attrs) {
+        if (context == null || attrs == null) {
+            return;
+        }
+
+        TypedArray typedArray = context.obtainStyledAttributes(attrs, R.styleable.BrokenLineView, 0, 0);
+
+        mCircleColor = typedArray.getColor(R.styleable.BrokenLineView_circleColor, getResources().getColor(CIRCLE_COLOR));
+        mCircleRadius = typedArray.getDimension(R.styleable.BrokenLineView_circleRadius, CIRCLE_RADIUS);
+
+        mTitleColumnColor = typedArray.getColor(R.styleable.BrokenLineView_titleColumnColor, getResources().getColor(TITLE_COLUMN_COLOR));
+
+        mTitleColumnStrokeWidth = typedArray.getDimension(R.styleable.BrokenLineView_titleColumnStrokeWidth, TITLE_COLUMN_STROKE_WIDTH);
+        mTitleColumnTextSize = typedArray.getDimension(R.styleable.BrokenLineView_titleColumnTextSize, TITLE_COLUMN_TEXT_SIZE);
+
+        mLineStrokeWidth = typedArray.getDimension(R.styleable.BrokenLineView_lineStrokeWidth, LINE_STROKE_WIDTH);
+        mLineColor = typedArray.getColor(R.styleable.BrokenLineView_lineColor, getResources().getColor(LINE_COLOR));
+
+        mDisplayRowCount = typedArray.getInteger(R.styleable.BrokenLineView_displayRowCount, DISPLAY_ROW_COUNT);
+
+        mAnimationTotalTime = typedArray.getInteger(R.styleable.BrokenLineView_animationTotalTime, ANIMATION_TOTAL_TIME);
+        mAnimationInterval = typedArray.getInteger(R.styleable.BrokenLineView_animationInterval, ANIMATION_INTERVAL);
+
+        typedArray.recycle();
+    }
+
+    // row標識線、名稱，column名稱
+    private void setGeneralDrawInfo(int width, int height) {
+        float maxRowValue = getMaxRowValue(mValueColumns);
+        int rowSpace = getRowSpace(height);
+        int columnLeftX = getColumnLeftX(width);
+        int rowLineBottomY = getRowLineBottomY(height);
+
+        for (int i = 0; i < mDisplayRowCount; i++) {
+            float rowY = rowLineBottomY - i * rowSpace;
+            mRowLineGeneralDrawInfoList.get(i)
+                    .setStartX(columnLeftX)
+                    .setStartY(rowY)
+                    .setStopX(width)
+                    .setStopY(rowY);
+
+            mRowTitleGeneralDrawInfoList.get(i)
+                    .setText(((int) (maxRowValue * i / (mDisplayRowCount - 1))) + "")
+                    .setX(width * 0.02f)
+                    .setY(rowY);
+        }
+
+        int columnSpace = getColumnSpace(width);
+        for (int i = 0; i < mValueColumns.size(); i++) {
+            mColumnTitleGeneralDrawInfoList.get(i)
+                    .setText(mTitleColumns.get(i))
+                    .setX(getTargetColumnX(width, columnLeftX, columnSpace, i))
+                    .setY(height * 0.95f);
+        }
+    }
+
+    // column折線、圓點
+    private void setColumnDrawInfo(int width, int height) {
+        if (mValueColumns.size() == 0) {
+            return;
+        }
+        float stopColumnY, stopColumnX;
+        float startColumnX = 0, startColumnY = 0;
+        int rowLineTopY = getRowLineTopY(height);
+        int rowLineBottomY = getRowLineBottomY(height);
+        int columnLeftX = getColumnLeftX(width);
+        int columnSpace = getColumnSpace(width);
+        for (int i = 0; i < mValueColumns.size(); i++) {
+            float originalY = rowLineTopY + (1 - (mOriginalValueColumns.get(i) / getMaxRowValue(mOriginalValueColumns))) * (rowLineBottomY - rowLineTopY);
+            float targetY = rowLineTopY + (1 - (mValueColumns.get(i) / getMaxRowValue(mValueColumns))) * (rowLineBottomY - rowLineTopY);
+            float distance = (targetY - originalY) / getAnimationTotalInterval() * (mCurrentAnimationIntervalIndex + 1);
+
+            stopColumnX = getTargetColumnX(width, columnLeftX, columnSpace, i);
+            stopColumnY = originalY + distance;
+
+            if (i > 0) {
+                mColumnLineAnimationDrawInfoList.get(i)
+                        .setStartX(startColumnX)
+                        .setStartY(startColumnY)
+                        .setStopX(stopColumnX)
+                        .setStopY(stopColumnY);
+            }
+
+            mColumnCircleAnimationDrawInfoList.get(i)
+                    .setStopX(stopColumnX)
+                    .setStopY(stopColumnY);
+
+            startColumnX = stopColumnX;
+            startColumnY = stopColumnY;
+        }
+    }
+
+    public void setValue(List<Float> values) {
+        removeCallbacks(this);
+        mOriginalValueColumns.clear();
+        for (Float valueColumn : mValueColumns) {
+            mOriginalValueColumns.add(valueColumn / getAnimationTotalInterval() * mCurrentAnimationIntervalIndex);
+        }
+
+        mValueColumns.clear();
+        mValueColumns.addAll(values);
+
+        mCurrentAnimationIntervalIndex = 0;
+        postDelayed(this, mAnimationInterval);
+    }
+
+    private float getTargetColumnX(int width, int columnLeftX, int columnSpace, int index) {
+        return columnLeftX + width * 0.05f + index * columnSpace;
+    }
+
+    private void initData() {
+        mRowLineGeneralDrawInfoList = createEmptyGeneralDrawInfo(mDisplayRowCount);
+        mRowTitleGeneralDrawInfoList = createEmptyGeneralDrawInfo(mDisplayRowCount);
+        mColumnLineAnimationDrawInfoList = createEmptyDrawInfo(mValueColumns.size());
+        mColumnCircleAnimationDrawInfoList = createEmptyDrawInfo(mValueColumns.size());
+        mColumnTitleGeneralDrawInfoList = createEmptyGeneralDrawInfo(mValueColumns.size());
+        complementData();
+        setColumnsTitle();
+    }
+
+    private int getAnimationTotalInterval() {
+        return mAnimationTotalTime / mAnimationInterval;
+    }
+
+    private List<AnimationDrawInfo> createEmptyDrawInfo(int size) {
+        List<AnimationDrawInfo> result = new ArrayList<>();
+        for (int i = 0; i < size; i++) {
+            result.add(new AnimationDrawInfo());
+        }
+        return result;
+    }
+
+    private List<GeneralDrawInfo> createEmptyGeneralDrawInfo(int size) {
+        List<GeneralDrawInfo> result = new ArrayList<>();
+        for (int i = 0; i < size; i++) {
+            result.add(new GeneralDrawInfo());
+        }
+        return result;
+    }
+
+    private int getColumnSpace(int width) {
+        return (int) ((width * 0.8) / mValueColumns.size());
+    }
+
+    private int getRowSpace(int height) {
+        return (int) ((height * 0.85) / (mDisplayRowCount - 1));
+    }
+
+    private int getRowLineTopY(int height) {
+        return getRowLineBottomY(height) - (mDisplayRowCount - 1) * getRowSpace(height);
+    }
+
+    private int getRowLineBottomY(int height) {
+        return (int) (height * 0.9);
+    }
+
+    private int getColumnLeftX(int width) {
+        return (int) (width * 0.1);
+    }
+
+    /**
+     * 數值補位至圖表上限
+     */
+    private void complementData() {
+        for (int i = 1; i <= mValueColumns.size(); i++) {
+            if (mOriginalValueColumns.size() < i) {
+                mOriginalValueColumns.add(0f);
+            }
+        }
+    }
+
+    private float getMaxRowValue(List<Float> rows) {
+        if (rows.size() == 0) {
+            return DEFAULT_MAX_ROW_VALUE;
+        }
+
+        float result = Collections.max(rows);
+        return result == 0 ? DEFAULT_MAX_ROW_VALUE : Collections.max(rows);
+    }
+
+    private void setDemoValue() {
+        post(new Runnable() {
+            @Override
+            public void run() {
+                setValue(new ArrayList<>(Arrays.asList(20f, 26f, 40f, 62f, 82f, 0f, 22f, 100f, 2f, 72f, 12f, 45f)));
+            }
+        });
+    }
+
+    private void setColumnsTitle() {
+        mTitleColumns = new ArrayList<>();
+        for (int i = 0; i < mValueColumns.size(); i++) {
+            mTitleColumns.add(i + 1 + "");
+        }
+    }
+
+    private static class AnimationDrawInfo {
+        private float mStartX;
+        private float mStartY;
+        private float mStopX;
+        private float mStopY;
+        private String mText = "";
+
+        public float getStartX() {
+            return mStartX;
+        }
+
+        public AnimationDrawInfo setStartX(float startX) {
+            mStartX = startX;
+            return this;
+        }
+
+        public float getStartY() {
+            return mStartY;
+        }
+
+        public AnimationDrawInfo setStartY(float startY) {
+            mStartY = startY;
+            return this;
+        }
+
+        public float getStopX() {
+            return mStopX;
+        }
+
+        public AnimationDrawInfo setStopX(float stopX) {
+            mStopX = stopX;
+            return this;
+        }
+
+        public float getStopY() {
+            return mStopY;
+        }
+
+        public AnimationDrawInfo setStopY(float stopY) {
+            mStopY = stopY;
+            return this;
+        }
+
+        public String getText() {
+            return mText;
+        }
+
+        public AnimationDrawInfo setText(String text) {
+            mText = text;
+            return this;
+        }
+    }
+
+    private static class GeneralDrawInfo {
+        private float mX;
+        private float mY;
+        private float mStartX;
+        private float mStartY;
+        private float mStopX;
+        private float mStopY;
+        private String mText = "";
+
+        public float getX() {
+            return mX;
+        }
+
+        public GeneralDrawInfo setX(float x) {
+            mX = x;
+            return this;
+        }
+
+        public float getY() {
+            return mY;
+        }
+
+        public GeneralDrawInfo setY(float y) {
+            mY = y;
+            return this;
+        }
+
+        public float getStartX() {
+            return mStartX;
+        }
+
+        public GeneralDrawInfo setStartX(float startX) {
+            mStartX = startX;
+            return this;
+        }
+
+        public float getStartY() {
+            return mStartY;
+        }
+
+        public GeneralDrawInfo setStartY(float startY) {
+            mStartY = startY;
+            return this;
+        }
+
+        public float getStopX() {
+            return mStopX;
+        }
+
+        public GeneralDrawInfo setStopX(float stopX) {
+            mStopX = stopX;
+            return this;
+        }
+
+        public float getStopY() {
+            return mStopY;
+        }
+
+        public GeneralDrawInfo setStopY(float stopY) {
+            mStopY = stopY;
+            return this;
+        }
+
+        public String getText() {
+            return mText;
+        }
+
+        public GeneralDrawInfo setText(String text) {
+            mText = text;
+            return this;
+        }
+    }
 }
